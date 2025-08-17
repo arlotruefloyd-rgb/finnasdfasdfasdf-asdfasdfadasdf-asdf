@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Platformer Game</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; background: #87ceeb; }
+    .button {
+      position: fixed;
+      width: 60px;
+      height: 60px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      font-size: 24px;
+      border-radius: 10px;
+      text-align: center;
+      line-height: 60px;
+      user-select: none;
+    }
+    #left { left: 20px; bottom: 80px; }
+    #right { left: 100px; bottom: 80px; }
+    #jump { right: 100px; bottom: 80px; }
+    #shoot { right: 20px; bottom: 160px; }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+
+<div id="left" class="button">◀</div>
+<div id="right" class="button">▶</div>
+<div id="jump" class="button">▲</div>
+<div id="shoot" class="button">●</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let player = {
+  x: 50, y: 300, width: 30, height: 30, color: "red",
+  dx: 0, dy: 0, speed: 4, jumpPower: -10, gravity: 0.5, grounded: false,
+  checkpoint: {x: 50, y: 300}, facing: 1
+};
+
+let levels = [ /* same as before */
+  { platforms: [{x:0,y:370,w:800,h:30},{x:200,y:300,w:100,h:10},{x:400,y:250,w:120,h:10},{x:600,y:200,w:100,h:10}],
+    enemies:[{x:250,y:270,width:30,height:30,dir:1,speed:2,range:[200,300]}],
+    checkpoints:[{x:420,y:220,width:20,height:30}],
+    goal:{x:750,y:170,width:30,height:30}
+  }
+];
+
+let currentLevel=0;
+let bullets=[];
+let keys={};
+
+// Mobile buttons
+let moveLeft=false, moveRight=false, jump=false, shoot=false;
+
+document.getElementById('left').addEventListener('touchstart',()=>moveLeft=true);
+document.getElementById('left').addEventListener('touchend',()=>moveLeft=false);
+
+document.getElementById('right').addEventListener('touchstart',()=>moveRight=true);
+document.getElementById('right').addEventListener('touchend',()=>moveRight=false);
+
+document.getElementById('jump').addEventListener('touchstart',()=>jump=true);
+document.getElementById('jump').addEventListener('touchend',()=>jump=false);
+
+document.getElementById('shoot').addEventListener('touchstart',()=>shoot=true);
+document.getElementById('shoot').addEventListener('touchend',()=>shoot=false);
+
+function resetPlayer(){player.x=player.checkpoint.x;player.y=player.checkpoint.y;player.dx=0;player.dy=0;}
+
+function shootBullet(){
+  let bullet={x:player.x+player.width/2,y:player.y+player.height/2,width:8,height:4,dx:8*player.facing};
+  bullets.push(bullet);
+}
+
+function update(){
+  let level=levels[currentLevel];
+
+  // Horizontal movement
+  player.dx = 0;
+  if (moveRight) { player.dx = player.speed; player.facing=1; }
+  if (moveLeft) { player.dx = -player.speed; player.facing=-1; }
+
+  // Jump
+  if(jump && player.grounded){ player.dy=player.jumpPower; player.grounded=false; }
+
+  // Apply gravity
+  player.dy+=player.gravity;
+  player.x+=player.dx;
+  player.y+=player.dy;
+
+  // Platforms collision
+  player.grounded=false;
+  for(let p of level.platforms){
+    if(player.x<p.x+p.width && player.x+player.width>p.x && player.y< p.y+p.height && player.y+player.height>p.y){
+      if(player.dy>0){player.y=p.y-player.height;player.dy=0;player.grounded=true;}
+    }
+  }
+
+  // Enemies
+  for(let e of level.enemies){
+    e.x+=e.dir*e.speed;
+    if(e.x<e.range[0]||e.x>e.range[1]) e.dir*=-1;
+    if(player.x<e.x+e.width && player.x+player.width>e.x && player.y<e.y+e.height && player.y+player.height>e.y){
+      resetPlayer();
+    }
+  }
+
+  // Bullets
+  if(shoot){ shootBullet(); shoot=false; }
+  for(let b of bullets) b.x+=b.dx;
+  bullets=bullets.filter(b=>b.x>0 && b.x<canvas.width);
+  for(let b of bullets){
+    for(let i=level.enemies.length-1;i>=0;i--){
+      let e=level.enemies[i];
+      if(b.x<e.x+e.width && b.x+b.width>e.x && b.y<e.y+e.height && b.y+b.height>e.y){
+        level.enemies.splice(i,1);
+      }
+    }
+  }
+
+  // Checkpoints
+  for(let c of level.checkpoints){
+    if(player.x<c.x+c.width && player.x+player.width>c.x && player.y<c.y+c.height && player.y+player.height>c.y){
+      player.checkpoint={x:c.x,y:c.y-player.height};
+    }
+  }
+
+  // Goal
+  let g=level.goal;
+  if(player.x<g.x+g.width && player.x+player.width>g.x && player.y<g.y+g.height && player.y+player.height>g.y){
+    alert('You win!'); resetPlayer();
+  }
+
+  // Boundaries
+  if(player.x<0) player.x=0;
+  if(player.x+player.width>canvas.width) player.x=canvas.width-player.width;
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  let level=levels[currentLevel];
+  ctx.fillStyle=player.color; ctx.fillRect(player.x,player.y,player.width,player.height);
+  ctx.fillStyle='green'; for(let p of level.platforms) ctx.fillRect(p.x,p.y,p.width,p.height);
+  ctx.fillStyle='black'; for(let e of level.enemies) ctx.fillRect(e.x,e.y,e.width,e.height);
+  ctx.fillStyle='orange'; for(let b of bullets) ctx.fillRect(b.x,b.y,b.width,b.height);
+  ctx.fillStyle='blue'; for(let c of level.checkpoints) ctx.fillRect(c.x,c.y,c.width,c.height);
+  ctx.fillStyle='yellow'; let g=level.goal; ctx.fillRect(g.x,g.y,g.width,g.height);
+}
+
+function gameLoop(){ update(); draw(); requestAnimationFrame(gameLoop); }
+gameLoop();
+</script>
+</body>
+</html>
